@@ -155,7 +155,6 @@
         </div>
     </div>
 
-    <!-- 新增：編輯與刪除班級 Modal -->
     <div class="modal-overlay" id="editClassModal">
         <div class="modal-content">
             <h2 class="modal-title">編輯班級</h2>
@@ -242,7 +241,6 @@
                     classesData = (doc.exists && doc.data().classes) ? doc.data().classes : [];
                     renderClasses();
                     if(currentClassId) {
-                        // 確保班級被刪除時不會報錯
                         const targetClass = classesData.find(c => c.id === currentClassId);
                         if (targetClass) {
                             renderAssignments();
@@ -277,19 +275,20 @@
 
         function logout() { isLocalMode = false; auth.signOut(); }
 
+        // 包含之前修好的單機模式防呆與首頁更新
         function syncDataToCloud() {
-    if (isLocalMode) {
-        localStorage.setItem('classPowerhouse_LocalData', JSON.stringify(classesData));
-        renderClasses(); // 同步更新首頁的班級卡片
-        const targetClass = classesData.find(c => c.id === currentClassId);
-        if (targetClass) { // 確認班級還存在才更新作業畫面
-            renderAssignments();
-            if(currentAssignmentId) renderCheckingGrid();
+            if (isLocalMode) {
+                localStorage.setItem('classPowerhouse_LocalData', JSON.stringify(classesData));
+                renderClasses(); 
+                const targetClass = classesData.find(c => c.id === currentClassId);
+                if (targetClass) { 
+                    renderAssignments();
+                    if(currentAssignmentId) renderCheckingGrid();
+                }
+            } else if (currentUser) {
+                db.collection("teachers").doc(currentUser.uid).set({ classes: classesData }, {merge: true});
+            }
         }
-    } else if (currentUser) {
-        db.collection("teachers").doc(currentUser.uid).set({ classes: classesData }, {merge: true});
-    }
-}
 
         let pendingConfirmAction = null; 
         function showConfirmModal(message, actionCallback, btnColor = 'btn-green', btnText = '確定') {
@@ -329,7 +328,6 @@
             document.getElementById('inputStudentList').value = '';
         }
 
-        // 新增：開啟編輯班級 Modal，自動載入當前資料
         function openEditClassModal() {
             const targetClass = classesData.find(c => c.id === currentClassId);
             document.getElementById('editClassName').value = targetClass.name;
@@ -338,12 +336,8 @@
             document.getElementById('editClassModal').style.display = 'flex';
         }
 
-        // 新增：關閉編輯班級 Modal
-        function closeEditClassModal() {
-            document.getElementById('editClassModal').style.display = 'none';
-        }
+        function closeEditClassModal() { document.getElementById('editClassModal').style.display = 'none'; }
 
-        // 新增：儲存編輯後的班級資料
         function saveEditClass() {
             const className = document.getElementById('editClassName').value.trim();
             const studentData = document.getElementById('editStudentList').value.trim();
@@ -364,7 +358,6 @@
             closeEditClassModal();
         }
 
-        // 新增：刪除當前班級
         function deleteCurrentClass() {
             showConfirmModal("確定要刪除整個班級嗎？所有學生紀錄與作業將永久消失且無法復原。", () => {
                 classesData = classesData.filter(c => c.id !== currentClassId);
@@ -402,11 +395,17 @@
             const targetClass = classesData.find(c => c.id === currentClassId);
             if (!targetClass.assignments || targetClass.assignments.length === 0) { contentArea.className = 'empty-state'; contentArea.innerHTML = '這個班級還沒有作業喔！'; return; }
             contentArea.className = 'assignment-list'; contentArea.innerHTML = '';
+            
             [...targetClass.assignments].reverse().forEach(task => {
                 let counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
-                for (let seat in task.records) {
-                    if(counts[task.records[seat]] !== undefined) counts[task.records[seat]]++;
-                }
+                
+                // ⭐️ 核心修正：只比對「當前存在的學生」，動態計算並處理新同學狀態
+                targetClass.students.forEach(student => {
+                    let state = task.records[student.seat];
+                    if (state === undefined) state = 0; // 新增的學生預設算在「未繳交 (0)」
+                    counts[state]++;
+                });
+
                 let card = document.createElement('div'); card.className = 'assignment-card';
                 card.innerHTML = `<div class="assignment-title">${task.title}</div><div class="stats-grid"><div class="stat-badge"><div class="stat-dot color-0"></div>未繳交 <span class="stat-count">${counts[0]}</span></div><div class="stat-badge"><div class="stat-dot color-1"></div>已繳交 <span class="stat-count">${counts[1]}</span></div><div class="stat-badge"><div class="stat-dot color-2"></div>待訂正 <span class="stat-count">${counts[2]}</span></div><div class="stat-badge"><div class="stat-dot color-3"></div>已完成 <span class="stat-count">${counts[3]}</span></div></div>`;
                 card.onclick = () => openCheckingView(task.id);
@@ -429,7 +428,6 @@
             const grid = document.getElementById('checkingGrid'); grid.innerHTML = '';
 
             targetClass.students.forEach(student => {
-                // 如果編輯名單後產生了新座號，預設為未繳交 (0)
                 let currentState = targetTask.records[student.seat];
                 if (currentState === undefined) {
                     currentState = 0;
@@ -479,7 +477,10 @@
             const student = targetClass.students.find(s => s.seat == seat);
             let report = `--- ${student.name} 的未完成項目 ---\n\n`; let hasIncomplete = false;
             targetClass.assignments.forEach(task => {
-                const status = task.records[seat];
+                // ⭐️ 核心修正：匯出報告時，也將新同學的空白紀錄視為未繳交
+                let status = task.records[seat];
+                if (status === undefined) status = 0; 
+
                 if (status === 0) { report += `- ${task.title} (未繳交)\n`; hasIncomplete = true; } 
                 else if (status === 2) { report += `- ${task.title} (待訂正)\n`; hasIncomplete = true; }
             });
