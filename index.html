@@ -239,8 +239,12 @@
             renderClasses();
         }
 
+        // 強制每次登入都跳出選擇帳號視窗
         function loginWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
+            provider.setCustomParameters({
+                prompt: 'select_account'
+            });
             auth.signInWithPopup(provider).catch(err => alert("登入失敗"));
         }
 
