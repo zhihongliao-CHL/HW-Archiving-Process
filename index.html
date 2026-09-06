@@ -8,8 +8,6 @@
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage-compat.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
         body { margin: 0; padding: 40px; font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #e0e3e6 0%, #f4f5f7 100%); min-height: 100vh; box-sizing: border-box; color: #2c2c2c; font-size: 18px; }
@@ -42,9 +40,11 @@
         .add-card { width: 300px; height: 140px; border: 2px dashed #aeb2b8; border-radius: 20px; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
         .plus-sign { font-size: 48px; color: #7a7e85; font-weight: 300; }
 
+        /* 保留作業清單標題的樣式 */
         .tabs-container { display: flex; gap: 12px; margin-bottom: 24px; }
-        .tab { flex: 1; text-align: center; padding: 16px 0; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; background-color: rgba(255, 255, 255, 0.6); color: #555; transition: 0.2s; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        .tab { flex: 1; text-align: center; padding: 16px 0; border-radius: 12px; font-size: 18px; font-weight: bold; background-color: rgba(255, 255, 255, 0.6); color: #555; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
         .tab.active { background-color: #424242; color: #ffffff; }
+
         .action-bar { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 24px; }
         
         .empty-state { background-color: rgba(255, 255, 255, 0.4); border-radius: 16px; padding: 40px; text-align: center; color: #7a7e85; font-size: 20px; font-weight: bold; }
@@ -71,9 +71,6 @@
         .student-cell:active { transform: scale(0.95); }
         .cell-name { margin-bottom: 8px; }
         .cell-status { font-size: 16px; opacity: 0.9; font-weight: normal; }
-        .photo-btn { position: absolute; top: -8px; right: -8px; background: #ff4081; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; border: 2px solid white; transition: 0.2s;}
-        .photo-btn:hover { transform: scale(1.1); background: #f50057; }
-        .has-photo { background: #3f51b5; }
 
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.4); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 1000; }
         .modal-content { background-color: #cfd3d6; width: 450px; border-radius: 24px; padding: 40px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); box-sizing: border-box; }
@@ -89,16 +86,11 @@
         .btn-green { background-color: #34c759; color: #ffffff; }
 
         .confirm-message { font-size: 24px; font-weight: bold; color: #1a1a1a; margin-bottom: 30px; line-height: 1.5; text-align: center; }
-        .chart-container { background: rgba(255,255,255,0.7); border-radius: 24px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto; display: none;}
         
-        #photoViewModal .modal-content { width: 90%; max-width: 600px; background: transparent; box-shadow: none; padding: 0; text-align: center; }
-        #photoViewImage { max-width: 100%; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); margin-bottom: 15px; }
         #offlineBadge { display: none; background: #ff9800; color: white; padding: 5px 10px; border-radius: 8px; font-size: 14px; font-weight: bold; margin-left: 10px; }
     </style>
 </head>
 <body>
-
-    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="uploadPhoto(event)">
 
     <div id="loginView">
         <div class="login-box">
@@ -125,9 +117,10 @@
             <h1 class="title" id="detailClassName">班級名稱</h1>
             <button class="btn btn-load" onclick="goBackToHome()">返回總覽</button>
         </header>
+
+        <!-- 加入作業清單標題列 -->
         <div class="tabs-container">
-            <div class="tab active" onclick="switchTab('list', this)">作業清單</div>
-            <div class="tab" onclick="switchTab('chart', this)">即時統計圖表</div>
+            <div class="tab active">作業清單</div>
         </div>
         
         <div id="tabListContent">
@@ -136,11 +129,6 @@
                 <button class="btn btn-dark" onclick="openAssignmentModal()">新增作業</button>
             </div>
             <div id="homeworkContent" class="empty-state">這個班級還沒有作業喔！</div>
-        </div>
-
-        <div id="tabChartContent" class="chart-container">
-            <h2 style="text-align: center; margin-top:0;">最新作業繳交率</h2>
-            <canvas id="statsChart"></canvas>
         </div>
     </div>
 
@@ -192,28 +180,19 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="photoViewModal">
-        <div class="modal-content">
-            <img id="photoViewImage" src="" alt="作業照片">
-            <br>
-            <button class="btn btn-load" onclick="document.getElementById('photoViewModal').style.display='none'">關閉預覽</button>
-        </div>
-    </div>
-
     <script>
         const firebaseConfig = {
-    apiKey: "AIzaSyA1ANTy0tPQSyWTo5_P54gNFWbvauQcE_M",
-    authDomain: "online-hw-archiving-process.firebaseapp.com",
-    projectId: "online-hw-archiving-process",
-    storageBucket: "online-hw-archiving-process.firebasestorage.app",
-    messagingSenderId: "557011003317",
-    appId: "1:557011003317:web:f4199056b426ffb24c5bfc",
-    measurementId: "G-1C3WEWVGQ8"
-};
+            apiKey: "AIzaSyA1ANTy0tPQSyWTo5_P54gNFWbvauQcE_M",
+            authDomain: "online-hw-archiving-process.firebaseapp.com",
+            projectId: "online-hw-archiving-process",
+            storageBucket: "online-hw-archiving-process.firebasestorage.app",
+            messagingSenderId: "557011003317",
+            appId: "1:557011003317:web:f4199056b426ffb24c5bfc",
+            measurementId: "G-1C3WEWVGQ8"
+        };
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
-        const storage = firebase.storage();
 
         db.enablePersistence().catch((err) => console.error("離線模式啟動失敗:", err));
 
@@ -225,8 +204,6 @@
         let classesData = []; 
         let currentClassId = null; 
         let currentAssignmentId = null; 
-        let currentPhotoSeat = null; 
-        let myChart = null; 
 
         const statusTexts = { 0: "未繳交", 1: "已繳交", 2: "待訂正", 3: "已完成" };
 
@@ -242,7 +219,6 @@
                     renderClasses();
                     if(currentClassId) {
                         renderAssignments();
-                        updateChart();
                         if(currentAssignmentId) renderCheckingGrid();
                     }
                 });
@@ -275,7 +251,6 @@
                 localStorage.setItem('classPowerhouse_LocalData', JSON.stringify(classesData));
                 renderAssignments();
                 if(currentAssignmentId) renderCheckingGrid();
-                updateChart();
             } else if (currentUser) {
                 db.collection("teachers").doc(currentUser.uid).set({ classes: classesData }, {merge: true});
             }
@@ -319,52 +294,9 @@
             document.getElementById('detailClassName').innerText = classesData.find(c => c.id === id).name; 
             document.getElementById('homeView').style.display = 'none'; 
             document.getElementById('classDetailView').style.display = 'block'; 
-            switchTab('list', document.querySelector('.tab'));
             renderAssignments(); 
         }
         function goBackToHome() { document.getElementById('classDetailView').style.display = 'none'; document.getElementById('homeView').style.display = 'block'; currentClassId = null; }
-
-        function switchTab(tabType, element) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            element.classList.add('active');
-            if(tabType === 'list') {
-                document.getElementById('tabListContent').style.display = 'block';
-                document.getElementById('tabChartContent').style.display = 'none';
-            } else {
-                document.getElementById('tabListContent').style.display = 'none';
-                document.getElementById('tabChartContent').style.display = 'block';
-                updateChart();
-            }
-        }
-
-        function updateChart() {
-            const targetClass = classesData.find(c => c.id === currentClassId);
-            if (!targetClass || !targetClass.assignments || targetClass.assignments.length === 0) return;
-            const latestTask = targetClass.assignments[targetClass.assignments.length - 1];
-            let counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
-            for (let seat in latestTask.records) counts[latestTask.records[seat]]++;
-
-            const ctx = document.getElementById('statsChart').getContext('2d');
-            if (myChart) myChart.destroy();
-            myChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['未繳交', '已繳交', '待訂正', '已完成'],
-                    datasets: [{
-                        data: [counts[0], counts[1], counts[2], counts[3]],
-                        backgroundColor: ['#e0e0e0', '#4a4a4a', '#ff9800', '#4caf50'],
-                        borderWidth: 2, hoverOffset: 10
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { position: 'bottom', labels: { font: { size: 16 } } },
-                        title: { display: true, text: `作業：${latestTask.title}`, font: { size: 18 } }
-                    }
-                }
-            });
-        }
 
         function openAssignmentModal() { document.getElementById('addAssignmentModal').style.display = 'flex'; }
         function closeAssignmentModal() { document.getElementById('addAssignmentModal').style.display = 'none'; }
@@ -373,7 +305,7 @@
             if (!title) return;
             const targetClass = classesData.find(c => c.id === currentClassId);
             let records = {}; targetClass.students.forEach(s => records[s.seat] = 0);
-            targetClass.assignments.push({ id: Date.now(), title: title, records: records, photos: {} });
+            targetClass.assignments.push({ id: Date.now(), title: title, records: records });
             syncDataToCloud(); closeAssignmentModal();
         }
 
@@ -405,11 +337,9 @@
             document.getElementById('checkingAssignmentTitle').innerText = targetTask.title;
             
             const grid = document.getElementById('checkingGrid'); grid.innerHTML = '';
-            if (!targetTask.photos) targetTask.photos = {};
 
             targetClass.students.forEach(student => {
                 let currentState = targetTask.records[student.seat];
-                let hasPhoto = targetTask.photos[student.seat] ? true : false;
                 
                 let cell = document.createElement('div'); 
                 cell.className = `student-cell state-${currentState}`;
@@ -418,61 +348,12 @@
                     <div class="cell-status">${statusTexts[currentState]}</div>
                 `;
 
-                let photoBtn = document.createElement('div');
-                photoBtn.className = hasPhoto ? 'photo-btn has-photo' : 'photo-btn';
-                photoBtn.innerHTML = hasPhoto ? '👁️' : '📷';
-                
-                photoBtn.onclick = (e) => {
-                    e.stopPropagation();
-                    if(hasPhoto) {
-                        document.getElementById('photoViewImage').src = targetTask.photos[student.seat];
-                        document.getElementById('photoViewModal').style.display = 'flex';
-                    } else {
-                        if(isLocalMode) return alert("單機模式無法上傳照片，請使用 Google 登入雲端版。");
-                        currentPhotoSeat = student.seat;
-                        document.getElementById('cameraInput').click();
-                    }
-                };
-                cell.appendChild(photoBtn);
-
                 cell.onclick = function() {
                     targetTask.records[student.seat] = (currentState + 1) % 4; 
                     syncDataToCloud();
                 };
                 grid.appendChild(cell);
             });
-        }
-
-        // ⭐️ 核心更新：照片自動依照 班級 / 學生姓名 獨立建立路徑上傳 ⭐️
-        function uploadPhoto(event) {
-            const file = event.target.files[0];
-            if (!file || !currentPhotoSeat || !currentUser) return;
-            
-            const targetClass = classesData.find(c => c.id === currentClassId);
-            const targetTask = targetClass.assignments.find(t => t.id === currentAssignmentId);
-            const student = targetClass.students.find(s => s.seat == currentPhotoSeat);
-
-            alert("照片上傳中，請稍候...");
-            
-            // 雲端硬碟自動分類路徑：homeworks / 老師UID / 班級名稱 / 座號_姓名 / 作業名稱.jpg
-            const cleanClassName = targetClass.name.replace(/[/\\?%*:|"<>\s]/g, "_");
-            const cleanStudentName = `${student.seat}_${student.name}`.replace(/[/\\?%*:|"<>\s]/g, "_");
-            const cleanTaskTitle = targetTask.title.replace(/[/\\?%*:|"<>\s]/g, "_");
-
-            const storagePath = `homeworks/${currentUser.uid}/${cleanClassName}/${cleanStudentName}/${cleanTaskTitle}.jpg`;
-            const storageRef = storage.ref(storagePath);
-            
-            storageRef.put(file).then(snapshot => {
-                return snapshot.ref.getDownloadURL();
-            }).then(downloadURL => {
-                targetTask.photos[currentPhotoSeat] = downloadURL; 
-                syncDataToCloud(); 
-                alert("上傳成功！已歸類至該學生的雲端資料夾中。");
-            }).catch(err => {
-                alert("上傳失敗：" + err.message);
-            });
-
-            event.target.value = ''; 
         }
 
         function goBackToAssignmentList() { document.getElementById('checkingView').style.display = 'none'; document.getElementById('classDetailView').style.display = 'block'; currentAssignmentId = null; }
