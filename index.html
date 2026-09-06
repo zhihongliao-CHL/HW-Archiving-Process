@@ -40,7 +40,6 @@
         .add-card { width: 300px; height: 140px; border: 2px dashed #aeb2b8; border-radius: 20px; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
         .plus-sign { font-size: 48px; color: #7a7e85; font-weight: 300; }
 
-        /* 保留作業清單標題的樣式 */
         .tabs-container { display: flex; gap: 12px; margin-bottom: 24px; }
         .tab { flex: 1; text-align: center; padding: 16px 0; border-radius: 12px; font-size: 18px; font-weight: bold; background-color: rgba(255, 255, 255, 0.6); color: #555; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
         .tab.active { background-color: #424242; color: #ffffff; }
@@ -83,6 +82,7 @@
         .btn-modal { flex: 1; padding: 16px 0; border-radius: 12px; font-size: 18px; font-weight: bold; border: none; cursor: pointer; transition: 0.2s;}
         .btn-cancel { background-color: #e4e7eb; color: #4a4a4a; }
         .btn-save { background-color: #424242; color: #ffffff; }
+        .btn-blue { background-color: #007aff; color: #ffffff; }
         .btn-green { background-color: #34c759; color: #ffffff; }
 
         .confirm-message { font-size: 24px; font-weight: bold; color: #1a1a1a; margin-bottom: 30px; line-height: 1.5; text-align: center; }
@@ -115,10 +115,12 @@
     <div id="classDetailView">
         <header class="header">
             <h1 class="title" id="detailClassName">班級名稱</h1>
-            <button class="btn btn-load" onclick="goBackToHome()">返回總覽</button>
+            <div class="header-buttons">
+                <button class="btn btn-load" onclick="openEditClassModal()">設定班級</button>
+                <button class="btn btn-load" onclick="goBackToHome()">返回總覽</button>
+            </div>
         </header>
 
-        <!-- 加入作業清單標題列 -->
         <div class="tabs-container">
             <div class="tab active">作業清單</div>
         </div>
@@ -150,6 +152,28 @@
             <div class="form-group"><label>班級名稱</label><input type="text" id="inputClassName" class="form-input" placeholder="例如：三年一班"></div>
             <div class="form-group"><label>學生名單 (人數或名單)</label><textarea id="inputStudentList" class="form-input" placeholder="輸入總人數(如 28) 或直接貼上名單"></textarea></div>
             <div class="modal-actions"><button class="btn-modal btn-cancel" onclick="closeClassModal()">取消</button><button class="btn-modal btn-save" onclick="saveClass()">儲存</button></div>
+        </div>
+    </div>
+
+    <!-- 新增：編輯與刪除班級 Modal -->
+    <div class="modal-overlay" id="editClassModal">
+        <div class="modal-content">
+            <h2 class="modal-title">編輯班級</h2>
+            <div class="form-group">
+                <label>班級名稱</label>
+                <input type="text" id="editClassName" class="form-input">
+            </div>
+            <div class="form-group">
+                <label>學生名單 (一行一個姓名)</label>
+                <textarea id="editStudentList" class="form-input" placeholder="修改順序會影響已建立的紀錄"></textarea>
+            </div>
+            <div class="modal-actions" style="justify-content: space-between; display: flex;">
+                <button class="btn-modal btn-danger" style="flex: 0.4;" onclick="deleteCurrentClass()">刪除班級</button>
+                <div style="display: flex; gap: 10px; flex: 0.6;">
+                    <button class="btn-modal btn-cancel" onclick="closeEditClassModal()">取消</button>
+                    <button class="btn-modal btn-blue" onclick="saveEditClass()">儲存</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -218,8 +242,14 @@
                     classesData = (doc.exists && doc.data().classes) ? doc.data().classes : [];
                     renderClasses();
                     if(currentClassId) {
-                        renderAssignments();
-                        if(currentAssignmentId) renderCheckingGrid();
+                        // 確保班級被刪除時不會報錯
+                        const targetClass = classesData.find(c => c.id === currentClassId);
+                        if (targetClass) {
+                            renderAssignments();
+                            if(currentAssignmentId) renderCheckingGrid();
+                        } else {
+                            goBackToHome();
+                        }
                     }
                 });
             } else if (!isLocalMode) {
@@ -239,26 +269,27 @@
             renderClasses();
         }
 
-        // 強制每次登入都跳出選擇帳號視窗
         function loginWithGoogle() {
             const provider = new firebase.auth.GoogleAuthProvider();
-            provider.setCustomParameters({
-                prompt: 'select_account'
-            });
+            provider.setCustomParameters({ prompt: 'select_account' });
             auth.signInWithPopup(provider).catch(err => alert("登入失敗"));
         }
 
         function logout() { isLocalMode = false; auth.signOut(); }
 
         function syncDataToCloud() {
-            if (isLocalMode) {
-                localStorage.setItem('classPowerhouse_LocalData', JSON.stringify(classesData));
-                renderAssignments();
-                if(currentAssignmentId) renderCheckingGrid();
-            } else if (currentUser) {
-                db.collection("teachers").doc(currentUser.uid).set({ classes: classesData }, {merge: true});
-            }
+    if (isLocalMode) {
+        localStorage.setItem('classPowerhouse_LocalData', JSON.stringify(classesData));
+        renderClasses(); // 同步更新首頁的班級卡片
+        const targetClass = classesData.find(c => c.id === currentClassId);
+        if (targetClass) { // 確認班級還存在才更新作業畫面
+            renderAssignments();
+            if(currentAssignmentId) renderCheckingGrid();
         }
+    } else if (currentUser) {
+        db.collection("teachers").doc(currentUser.uid).set({ classes: classesData }, {merge: true});
+    }
+}
 
         let pendingConfirmAction = null; 
         function showConfirmModal(message, actionCallback, btnColor = 'btn-green', btnText = '確定') {
@@ -282,6 +313,8 @@
             const addCard = document.createElement('div'); addCard.className = 'add-card'; addCard.onclick = () => document.getElementById('addModal').style.display = 'flex'; addCard.innerHTML = `<div class="plus-sign">+</div>`; grid.appendChild(addCard);
         }
 
+        function closeClassModal() { document.getElementById('addModal').style.display = 'none'; }
+        
         function saveClass() {
             const className = document.getElementById('inputClassName').value.trim();
             const studentData = document.getElementById('inputStudentList').value.trim();
@@ -290,7 +323,55 @@
             if (!isNaN(studentData)) { for(let i=1; i<=parseInt(studentData); i++) studentsArray.push({ seat: i, name: `${i}號` }); } 
             else { studentData.split(/[\n,]+/).filter(n => n.trim() !== '').forEach((name, i) => studentsArray.push({ seat: i+1, name: name })); }
             classesData.push({ id: Date.now(), name: className, students: studentsArray, assignments: [] });
-            syncDataToCloud(); document.getElementById('addModal').style.display = 'none';
+            syncDataToCloud(); 
+            document.getElementById('addModal').style.display = 'none';
+            document.getElementById('inputClassName').value = '';
+            document.getElementById('inputStudentList').value = '';
+        }
+
+        // 新增：開啟編輯班級 Modal，自動載入當前資料
+        function openEditClassModal() {
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            document.getElementById('editClassName').value = targetClass.name;
+            const nameList = targetClass.students.map(s => s.name).join('\n');
+            document.getElementById('editStudentList').value = nameList;
+            document.getElementById('editClassModal').style.display = 'flex';
+        }
+
+        // 新增：關閉編輯班級 Modal
+        function closeEditClassModal() {
+            document.getElementById('editClassModal').style.display = 'none';
+        }
+
+        // 新增：儲存編輯後的班級資料
+        function saveEditClass() {
+            const className = document.getElementById('editClassName').value.trim();
+            const studentData = document.getElementById('editStudentList').value.trim();
+            if (!className || !studentData) return alert("請填寫班級名稱與完整學生名單");
+            
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            targetClass.name = className;
+            
+            let newStudentsArray = [];
+            let names = studentData.split(/[\n,]+/).filter(n => n.trim() !== '');
+            names.forEach((name, i) => {
+                newStudentsArray.push({ seat: i + 1, name: name.trim() });
+            });
+            targetClass.students = newStudentsArray;
+            
+            document.getElementById('detailClassName').innerText = className;
+            syncDataToCloud();
+            closeEditClassModal();
+        }
+
+        // 新增：刪除當前班級
+        function deleteCurrentClass() {
+            showConfirmModal("確定要刪除整個班級嗎？所有學生紀錄與作業將永久消失且無法復原。", () => {
+                classesData = classesData.filter(c => c.id !== currentClassId);
+                syncDataToCloud();
+                closeEditClassModal();
+                goBackToHome();
+            }, 'btn-danger', '確定刪除班級');
         }
 
         function openClassDetail(id) { 
@@ -300,6 +381,7 @@
             document.getElementById('classDetailView').style.display = 'block'; 
             renderAssignments(); 
         }
+        
         function goBackToHome() { document.getElementById('classDetailView').style.display = 'none'; document.getElementById('homeView').style.display = 'block'; currentClassId = null; }
 
         function openAssignmentModal() { document.getElementById('addAssignmentModal').style.display = 'flex'; }
@@ -310,7 +392,9 @@
             const targetClass = classesData.find(c => c.id === currentClassId);
             let records = {}; targetClass.students.forEach(s => records[s.seat] = 0);
             targetClass.assignments.push({ id: Date.now(), title: title, records: records });
-            syncDataToCloud(); closeAssignmentModal();
+            syncDataToCloud(); 
+            closeAssignmentModal();
+            document.getElementById('inputAssignmentName').value = '';
         }
 
         function renderAssignments() {
@@ -320,7 +404,9 @@
             contentArea.className = 'assignment-list'; contentArea.innerHTML = '';
             [...targetClass.assignments].reverse().forEach(task => {
                 let counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
-                for (let seat in task.records) counts[task.records[seat]]++;
+                for (let seat in task.records) {
+                    if(counts[task.records[seat]] !== undefined) counts[task.records[seat]]++;
+                }
                 let card = document.createElement('div'); card.className = 'assignment-card';
                 card.innerHTML = `<div class="assignment-title">${task.title}</div><div class="stats-grid"><div class="stat-badge"><div class="stat-dot color-0"></div>未繳交 <span class="stat-count">${counts[0]}</span></div><div class="stat-badge"><div class="stat-dot color-1"></div>已繳交 <span class="stat-count">${counts[1]}</span></div><div class="stat-badge"><div class="stat-dot color-2"></div>待訂正 <span class="stat-count">${counts[2]}</span></div><div class="stat-badge"><div class="stat-dot color-3"></div>已完成 <span class="stat-count">${counts[3]}</span></div></div>`;
                 card.onclick = () => openCheckingView(task.id);
@@ -343,7 +429,12 @@
             const grid = document.getElementById('checkingGrid'); grid.innerHTML = '';
 
             targetClass.students.forEach(student => {
+                // 如果編輯名單後產生了新座號，預設為未繳交 (0)
                 let currentState = targetTask.records[student.seat];
+                if (currentState === undefined) {
+                    currentState = 0;
+                    targetTask.records[student.seat] = 0;
+                }
                 
                 let cell = document.createElement('div'); 
                 cell.className = `student-cell state-${currentState}`;
@@ -380,6 +471,7 @@
             document.getElementById('exportReportText').value = ''; document.getElementById('exportModal').style.display = 'flex';
         }
         function closeExportModal() { document.getElementById('exportModal').style.display = 'none'; }
+        
         function generateReport() {
             const seat = document.getElementById('exportStudentSelect').value;
             if (!seat) { document.getElementById('exportReportText').value = ''; return; }
@@ -394,6 +486,7 @@
             if (!hasIncomplete) report += "✅ 太棒了！所有指派作業皆已完成。";
             document.getElementById('exportReportText').value = report;
         }
+        
         function copyReport() {
             document.getElementById('exportReportText').select(); document.execCommand('copy');
             alert("✅ 報告已成功複製到剪貼簿！"); document.getElementById('exportModal').style.display = 'none';
