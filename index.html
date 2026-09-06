@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>班級經營動力站 - 分類雲端硬碟版</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-storage-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { margin: 0; padding: 40px; font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #e0e3e6 0%, #f4f5f7 100%); min-height: 100vh; box-sizing: border-box; color: #2c2c2c; font-size: 18px; }
+        button { font-family: inherit; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
+        .title { font-size: 36px; font-weight: 900; margin: 0; letter-spacing: 2px; }
+        .header-buttons { display: flex; gap: 15px; align-items: center; }
+        .btn { padding: 12px 28px; font-size: 18px; font-weight: bold; border-radius: 12px; border: none; cursor: pointer; transition: 0.2s; }
+        .btn-load { background-color: #dadddf; color: #4a4a4a; } .btn-load:hover { background-color: #c8ccce; }
+        .btn-export { background-color: #4a4a4a; color: #ffffff; }
+        .btn-danger { background-color: #f44336; color: white; }
+        .btn-orange { background-color: #ff9800; color: white; }
+        .btn-dark { background-color: #424242; color: white; }
+        .user-profile { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 16px; color: #555; }
+        .user-profile img { width: 40px; height: 40px; border-radius: 50%; }
+
+        #loginView { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 80vh; text-align: center; }
+        .login-box { background: rgba(255,255,255,0.8); padding: 50px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); backdrop-filter: blur(10px); }
+        .login-box h1 { font-size: 42px; margin-bottom: 10px; color: #2c2c2c; }
+        .login-box p { font-size: 20px; color: #666; margin-bottom: 40px; }
+        .btn-google { background-color: #4285F4; color: white; padding: 15px 30px; font-size: 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 auto 15px auto; width: 100%;}
+        .btn-local { background-color: #f1f3f4; color: #3c4043; padding: 15px 30px; font-size: 20px; border-radius: 12px; border: 2px dashed #dadce0; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0 auto; width: 100%; transition: 0.2s;}
+        
+        #homeView, #classDetailView, #checkingView { display: none; }
+        .card-grid { display: flex; gap: 24px; flex-wrap: wrap; }
+        .class-card { width: 300px; height: 140px; background-color: rgba(235, 237, 240, 0.8); border-radius: 20px; padding: 28px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05); cursor: pointer; transition: 0.2s; }
+        .class-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08); }
+        .class-name { font-size: 24px; font-weight: bold; margin: 0; }
+        .student-count { font-size: 16px; color: #555; margin: 0; }
+        .add-card { width: 300px; height: 140px; border: 2px dashed #aeb2b8; border-radius: 20px; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
+        .plus-sign { font-size: 48px; color: #7a7e85; font-weight: 300; }
+
+        .tabs-container { display: flex; gap: 12px; margin-bottom: 24px; }
+        .tab { flex: 1; text-align: center; padding: 16px 0; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; background-color: rgba(255, 255, 255, 0.6); color: #555; transition: 0.2s; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        .tab.active { background-color: #424242; color: #ffffff; }
+        .action-bar { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 24px; }
+        
+        .empty-state { background-color: rgba(255, 255, 255, 0.4); border-radius: 16px; padding: 40px; text-align: center; color: #7a7e85; font-size: 20px; font-weight: bold; }
+        .assignment-list { display: flex; flex-wrap: wrap; gap: 24px; }
+        .assignment-card { background-color: rgba(255, 255, 255, 0.65); backdrop-filter: blur(10px); border-radius: 20px; padding: 24px; width: 340px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); cursor: pointer; transition: 0.2s; box-sizing: border-box; }
+        .assignment-title { font-size: 20px; font-weight: bold; color: #1a1a1a; margin-bottom: 20px; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .stat-badge { background-color: rgba(228, 231, 235, 0.6); border-radius: 10px; padding: 10px 14px; display: flex; align-items: center; font-size: 15px; color: #4a4a4a; font-weight: bold; }
+        .stat-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; }
+        
+        .color-0 { background-color: #e0e0e0; } 
+        .color-1 { background-color: #4a4a4a; } 
+        .color-2 { background-color: #ff9800; } 
+        .color-3 { background-color: #4caf50; } 
+        .state-0 { background-color: transparent; border: 2px solid #b0b5ba; color: #555; }
+        .state-1 { background-color: #4a4a4a; border: 2px solid #4a4a4a; color: white; }
+        .state-2 { background-color: #ff9800; border: 2px solid #ff9800; color: white; }
+        .state-3 { background-color: #4caf50; border: 2px solid #4caf50; color: white; }
+
+        .checking-panel { background-color: rgba(255, 255, 255, 0.65); backdrop-filter: blur(10px); border-radius: 24px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .student-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
+        
+        .student-cell { position: relative; padding: 20px 10px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: 0.1s; font-size: 20px; font-weight: bold; box-sizing: border-box; }
+        .student-cell:active { transform: scale(0.95); }
+        .cell-name { margin-bottom: 8px; }
+        .cell-status { font-size: 16px; opacity: 0.9; font-weight: normal; }
+        .photo-btn { position: absolute; top: -8px; right: -8px; background: #ff4081; color: white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; font-size: 16px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 10; border: 2px solid white; transition: 0.2s;}
+        .photo-btn:hover { transform: scale(1.1); background: #f50057; }
+        .has-photo { background: #3f51b5; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.4); backdrop-filter: blur(5px); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background-color: #cfd3d6; width: 450px; border-radius: 24px; padding: 40px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); box-sizing: border-box; }
+        .modal-title { font-size: 28px; font-weight: 900; margin: 0 0 24px 0; }
+        .form-group label { display: block; font-size: 16px; margin-bottom: 10px; font-weight: bold; color: #333; }
+        .form-input { width: 100%; background-color: #e4e7eb; border: none; border-radius: 12px; padding: 16px; font-size: 18px; box-sizing: border-box; outline: none; font-family: inherit;}
+        textarea.form-input { resize: vertical; min-height: 140px; line-height: 1.6; }
+        select.form-input { cursor: pointer; }
+        .modal-actions { display: flex; gap: 16px; margin-top: 30px; }
+        .btn-modal { flex: 1; padding: 16px 0; border-radius: 12px; font-size: 18px; font-weight: bold; border: none; cursor: pointer; transition: 0.2s;}
+        .btn-cancel { background-color: #e4e7eb; color: #4a4a4a; }
+        .btn-save { background-color: #424242; color: #ffffff; }
+        .btn-green { background-color: #34c759; color: #ffffff; }
+
+        .confirm-message { font-size: 24px; font-weight: bold; color: #1a1a1a; margin-bottom: 30px; line-height: 1.5; text-align: center; }
+        .chart-container { background: rgba(255,255,255,0.7); border-radius: 24px; padding: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 600px; margin: 0 auto; display: none;}
+        
+        #photoViewModal .modal-content { width: 90%; max-width: 600px; background: transparent; box-shadow: none; padding: 0; text-align: center; }
+        #photoViewImage { max-width: 100%; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); margin-bottom: 15px; }
+        #offlineBadge { display: none; background: #ff9800; color: white; padding: 5px 10px; border-radius: 8px; font-size: 14px; font-weight: bold; margin-left: 10px; }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display: none;" onchange="uploadPhoto(event)">
+
+    <div id="loginView">
+        <div class="login-box">
+            <h1>班級經營動力站</h1>
+            <p>跨裝置雲端同步．作業點收系統</p>
+            <button class="btn-google" onclick="loginWithGoogle()">☁️ 使用 Google 帳號登入 (需上線)</button>
+            <button class="btn-local" onclick="loginLocalMode()">💻 本地測試登入 (免連網)</button>
+        </div>
+    </div>
+
+    <div id="homeView">
+        <header class="header">
+            <h1 class="title">班級經營動力站 <span id="offlineBadge">⚡ 離線模式中</span></h1>
+            <div class="header-buttons">
+                <div class="user-profile" id="userProfile"></div>
+                <button class="btn btn-load" onclick="logout()">登出</button>
+            </div>
+        </header>
+        <main class="card-grid" id="classGrid"></main>
+    </div>
+
+    <div id="classDetailView">
+        <header class="header">
+            <h1 class="title" id="detailClassName">班級名稱</h1>
+            <button class="btn btn-load" onclick="goBackToHome()">返回總覽</button>
+        </header>
+        <div class="tabs-container">
+            <div class="tab active" onclick="switchTab('list', this)">作業清單</div>
+            <div class="tab" onclick="switchTab('chart', this)">即時統計圖表</div>
+        </div>
+        
+        <div id="tabListContent">
+            <div class="action-bar">
+                <button class="btn btn-load" onclick="openExportModal()">匯出學生報告</button>
+                <button class="btn btn-dark" onclick="openAssignmentModal()">新增作業</button>
+            </div>
+            <div id="homeworkContent" class="empty-state">這個班級還沒有作業喔！</div>
+        </div>
+
+        <div id="tabChartContent" class="chart-container">
+            <h2 style="text-align: center; margin-top:0;">最新作業繳交率</h2>
+            <canvas id="statsChart"></canvas>
+        </div>
+    </div>
+
+    <div id="checkingView">
+        <header class="header">
+            <h1 class="title" id="checkingAssignmentTitle">作業名稱</h1>
+            <div class="header-buttons">
+                <button class="btn btn-load" onclick="goBackToAssignmentList()">返回作業列表</button>
+                <button class="btn btn-danger" onclick="deleteCurrentAssignment()">刪除作業</button>
+            </div>
+        </header>
+        <div class="checking-panel"><div class="student-grid" id="checkingGrid"></div></div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="addModal">
+        <div class="modal-content">
+            <h2 class="modal-title">新增班級</h2>
+            <div class="form-group"><label>班級名稱</label><input type="text" id="inputClassName" class="form-input" placeholder="例如：三年一班"></div>
+            <div class="form-group"><label>學生名單 (人數或名單)</label><textarea id="inputStudentList" class="form-input" placeholder="輸入總人數(如 28) 或直接貼上名單"></textarea></div>
+            <div class="modal-actions"><button class="btn-modal btn-cancel" onclick="closeClassModal()">取消</button><button class="btn-modal btn-save" onclick="saveClass()">儲存</button></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="addAssignmentModal">
+        <div class="modal-content">
+            <h2 class="modal-title">新增作業</h2>
+            <div class="form-group"><label>作業名稱</label><input type="text" id="inputAssignmentName" class="form-input" placeholder="例如：數學習作 P.30-32"></div>
+            <div class="modal-actions"><button class="btn-modal btn-cancel" onclick="closeAssignmentModal()">取消</button><button class="btn-modal btn-save" onclick="saveAssignment()">確認新增</button></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="exportModal">
+        <div class="modal-content">
+            <h2 class="modal-title">匯出個別學生報告</h2>
+            <div class="form-group"><label>選擇學生</label><select id="exportStudentSelect" class="form-input" onchange="generateReport()"></select></div>
+            <div class="form-group"><label>未完成項目</label><textarea id="exportReportText" class="form-input" readonly></textarea></div>
+            <div class="modal-actions"><button class="btn-modal btn-green" onclick="copyReport()">複製到剪貼簿</button><button class="btn-modal btn-cancel" onclick="closeExportModal()">關閉</button></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="customConfirmModal" style="z-index: 3000;">
+        <div class="modal-content" style="width: 450px; text-align: center;">
+            <div class="confirm-message" id="confirmMessageText">您確定要執行此動作嗎？</div>
+            <div class="modal-actions">
+                <button class="btn-modal btn-cancel" onclick="closeConfirmModal()">取消</button>
+                <button class="btn-modal btn-green" id="confirmActionBtn">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="photoViewModal">
+        <div class="modal-content">
+            <img id="photoViewImage" src="" alt="作業照片">
+            <br>
+            <button class="btn btn-load" onclick="document.getElementById('photoViewModal').style.display='none'">關閉預覽</button>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+    apiKey: "AIzaSyA1ANTy0tPQSyWTo5_P54gNFWbvauQcE_M",
+    authDomain: "online-hw-archiving-process.firebaseapp.com",
+    projectId: "online-hw-archiving-process",
+    storageBucket: "online-hw-archiving-process.firebasestorage.app",
+    messagingSenderId: "557011003317",
+    appId: "1:557011003317:web:f4199056b426ffb24c5bfc",
+    measurementId: "G-1C3WEWVGQ8"
+};
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+
+        db.enablePersistence().catch((err) => console.error("離線模式啟動失敗:", err));
+
+        window.addEventListener('online',  () => document.getElementById('offlineBadge').style.display = 'none');
+        window.addEventListener('offline', () => document.getElementById('offlineBadge').style.display = 'inline-block');
+
+        let currentUser = null;
+        let isLocalMode = false;
+        let classesData = []; 
+        let currentClassId = null; 
+        let currentAssignmentId = null; 
+        let currentPhotoSeat = null; 
+        let myChart = null; 
+
+        const statusTexts = { 0: "未繳交", 1: "已繳交", 2: "待訂正", 3: "已完成" };
+
+        auth.onAuthStateChanged((user) => {
+            if (user && !isLocalMode) {
+                currentUser = user;
+                document.getElementById('loginView').style.display = 'none';
+                document.getElementById('homeView').style.display = 'block';
+                document.getElementById('userProfile').innerHTML = `<img src="${user.photoURL}" alt="User"> ${user.displayName}`;
+                
+                db.collection("teachers").doc(currentUser.uid).onSnapshot((doc) => {
+                    classesData = (doc.exists && doc.data().classes) ? doc.data().classes : [];
+                    renderClasses();
+                    if(currentClassId) {
+                        renderAssignments();
+                        updateChart();
+                        if(currentAssignmentId) renderCheckingGrid();
+                    }
+                });
+            } else if (!isLocalMode) {
+                currentUser = null;
+                document.getElementById('loginView').style.display = 'flex';
+                document.getElementById('homeView').style.display = 'none';
+            }
+        });
+
+        function loginLocalMode() {
+            isLocalMode = true;
+            document.getElementById('loginView').style.display = 'none';
+            document.getElementById('homeView').style.display = 'block';
+            document.getElementById('userProfile').innerHTML = `👨‍🏫 測試老師 (單機)`;
+            const savedData = localStorage.getItem('classPowerhouse_LocalData');
+            classesData = savedData ? JSON.parse(savedData) : [];
+            renderClasses();
+        }
+
+        function loginWithGoogle() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(err => alert("登入失敗"));
+        }
+
+        function logout() { isLocalMode = false; auth.signOut(); }
+
+        function syncDataToCloud() {
+            if (isLocalMode) {
+                localStorage.setItem('classPowerhouse_LocalData', JSON.stringify(classesData));
+                renderAssignments();
+                if(currentAssignmentId) renderCheckingGrid();
+                updateChart();
+            } else if (currentUser) {
+                db.collection("teachers").doc(currentUser.uid).set({ classes: classesData }, {merge: true});
+            }
+        }
+
+        let pendingConfirmAction = null; 
+        function showConfirmModal(message, actionCallback, btnColor = 'btn-green', btnText = '確定') {
+            document.getElementById('confirmMessageText').innerText = message;
+            document.getElementById('confirmActionBtn').className = `btn-modal ${btnColor}`; 
+            document.getElementById('confirmActionBtn').innerText = btnText;
+            pendingConfirmAction = actionCallback;
+            document.getElementById('customConfirmModal').style.display = 'flex';
+        }
+        function closeConfirmModal() { document.getElementById('customConfirmModal').style.display = 'none'; pendingConfirmAction = null; }
+        document.getElementById('confirmActionBtn').onclick = function() { if (pendingConfirmAction) pendingConfirmAction(); closeConfirmModal(); };
+
+        function renderClasses() {
+            const grid = document.getElementById('classGrid'); grid.innerHTML = ''; 
+            classesData.forEach(cls => {
+                const card = document.createElement('div'); card.className = 'class-card';
+                card.innerHTML = `<div class="card-top"><h2 class="class-name">${cls.name}</h2></div><p class="student-count">${cls.students.length} 位學生</p>`;
+                card.onclick = () => openClassDetail(cls.id);
+                grid.appendChild(card);
+            });
+            const addCard = document.createElement('div'); addCard.className = 'add-card'; addCard.onclick = () => document.getElementById('addModal').style.display = 'flex'; addCard.innerHTML = `<div class="plus-sign">+</div>`; grid.appendChild(addCard);
+        }
+
+        function saveClass() {
+            const className = document.getElementById('inputClassName').value.trim();
+            const studentData = document.getElementById('inputStudentList').value.trim();
+            if (!className || !studentData) return;
+            let studentsArray = [];
+            if (!isNaN(studentData)) { for(let i=1; i<=parseInt(studentData); i++) studentsArray.push({ seat: i, name: `${i}號` }); } 
+            else { studentData.split(/[\n,]+/).filter(n => n.trim() !== '').forEach((name, i) => studentsArray.push({ seat: i+1, name: name })); }
+            classesData.push({ id: Date.now(), name: className, students: studentsArray, assignments: [] });
+            syncDataToCloud(); document.getElementById('addModal').style.display = 'none';
+        }
+
+        function openClassDetail(id) { 
+            currentClassId = id; 
+            document.getElementById('detailClassName').innerText = classesData.find(c => c.id === id).name; 
+            document.getElementById('homeView').style.display = 'none'; 
+            document.getElementById('classDetailView').style.display = 'block'; 
+            switchTab('list', document.querySelector('.tab'));
+            renderAssignments(); 
+        }
+        function goBackToHome() { document.getElementById('classDetailView').style.display = 'none'; document.getElementById('homeView').style.display = 'block'; currentClassId = null; }
+
+        function switchTab(tabType, element) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            element.classList.add('active');
+            if(tabType === 'list') {
+                document.getElementById('tabListContent').style.display = 'block';
+                document.getElementById('tabChartContent').style.display = 'none';
+            } else {
+                document.getElementById('tabListContent').style.display = 'none';
+                document.getElementById('tabChartContent').style.display = 'block';
+                updateChart();
+            }
+        }
+
+        function updateChart() {
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            if (!targetClass || !targetClass.assignments || targetClass.assignments.length === 0) return;
+            const latestTask = targetClass.assignments[targetClass.assignments.length - 1];
+            let counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
+            for (let seat in latestTask.records) counts[latestTask.records[seat]]++;
+
+            const ctx = document.getElementById('statsChart').getContext('2d');
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['未繳交', '已繳交', '待訂正', '已完成'],
+                    datasets: [{
+                        data: [counts[0], counts[1], counts[2], counts[3]],
+                        backgroundColor: ['#e0e0e0', '#4a4a4a', '#ff9800', '#4caf50'],
+                        borderWidth: 2, hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { font: { size: 16 } } },
+                        title: { display: true, text: `作業：${latestTask.title}`, font: { size: 18 } }
+                    }
+                }
+            });
+        }
+
+        function openAssignmentModal() { document.getElementById('addAssignmentModal').style.display = 'flex'; }
+        function closeAssignmentModal() { document.getElementById('addAssignmentModal').style.display = 'none'; }
+        function saveAssignment() {
+            const title = document.getElementById('inputAssignmentName').value.trim();
+            if (!title) return;
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            let records = {}; targetClass.students.forEach(s => records[s.seat] = 0);
+            targetClass.assignments.push({ id: Date.now(), title: title, records: records, photos: {} });
+            syncDataToCloud(); closeAssignmentModal();
+        }
+
+        function renderAssignments() {
+            const contentArea = document.getElementById('homeworkContent');
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            if (!targetClass.assignments || targetClass.assignments.length === 0) { contentArea.className = 'empty-state'; contentArea.innerHTML = '這個班級還沒有作業喔！'; return; }
+            contentArea.className = 'assignment-list'; contentArea.innerHTML = '';
+            [...targetClass.assignments].reverse().forEach(task => {
+                let counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
+                for (let seat in task.records) counts[task.records[seat]]++;
+                let card = document.createElement('div'); card.className = 'assignment-card';
+                card.innerHTML = `<div class="assignment-title">${task.title}</div><div class="stats-grid"><div class="stat-badge"><div class="stat-dot color-0"></div>未繳交 <span class="stat-count">${counts[0]}</span></div><div class="stat-badge"><div class="stat-dot color-1"></div>已繳交 <span class="stat-count">${counts[1]}</span></div><div class="stat-badge"><div class="stat-dot color-2"></div>待訂正 <span class="stat-count">${counts[2]}</span></div><div class="stat-badge"><div class="stat-dot color-3"></div>已完成 <span class="stat-count">${counts[3]}</span></div></div>`;
+                card.onclick = () => openCheckingView(task.id);
+                contentArea.appendChild(card);
+            });
+        }
+
+        function openCheckingView(taskId) {
+            currentAssignmentId = taskId;
+            document.getElementById('classDetailView').style.display = 'none'; 
+            document.getElementById('checkingView').style.display = 'block'; 
+            renderCheckingGrid();
+        }
+
+        function renderCheckingGrid() {
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            const targetTask = targetClass.assignments.find(t => t.id === currentAssignmentId);
+            document.getElementById('checkingAssignmentTitle').innerText = targetTask.title;
+            
+            const grid = document.getElementById('checkingGrid'); grid.innerHTML = '';
+            if (!targetTask.photos) targetTask.photos = {};
+
+            targetClass.students.forEach(student => {
+                let currentState = targetTask.records[student.seat];
+                let hasPhoto = targetTask.photos[student.seat] ? true : false;
+                
+                let cell = document.createElement('div'); 
+                cell.className = `student-cell state-${currentState}`;
+                cell.innerHTML = `
+                    <div class="cell-name">${student.name}</div>
+                    <div class="cell-status">${statusTexts[currentState]}</div>
+                `;
+
+                let photoBtn = document.createElement('div');
+                photoBtn.className = hasPhoto ? 'photo-btn has-photo' : 'photo-btn';
+                photoBtn.innerHTML = hasPhoto ? '👁️' : '📷';
+                
+                photoBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if(hasPhoto) {
+                        document.getElementById('photoViewImage').src = targetTask.photos[student.seat];
+                        document.getElementById('photoViewModal').style.display = 'flex';
+                    } else {
+                        if(isLocalMode) return alert("單機模式無法上傳照片，請使用 Google 登入雲端版。");
+                        currentPhotoSeat = student.seat;
+                        document.getElementById('cameraInput').click();
+                    }
+                };
+                cell.appendChild(photoBtn);
+
+                cell.onclick = function() {
+                    targetTask.records[student.seat] = (currentState + 1) % 4; 
+                    syncDataToCloud();
+                };
+                grid.appendChild(cell);
+            });
+        }
+
+        // ⭐️ 核心更新：照片自動依照 班級 / 學生姓名 獨立建立路徑上傳 ⭐️
+        function uploadPhoto(event) {
+            const file = event.target.files[0];
+            if (!file || !currentPhotoSeat || !currentUser) return;
+            
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            const targetTask = targetClass.assignments.find(t => t.id === currentAssignmentId);
+            const student = targetClass.students.find(s => s.seat == currentPhotoSeat);
+
+            alert("照片上傳中，請稍候...");
+            
+            // 雲端硬碟自動分類路徑：homeworks / 老師UID / 班級名稱 / 座號_姓名 / 作業名稱.jpg
+            const cleanClassName = targetClass.name.replace(/[/\\?%*:|"<>\s]/g, "_");
+            const cleanStudentName = `${student.seat}_${student.name}`.replace(/[/\\?%*:|"<>\s]/g, "_");
+            const cleanTaskTitle = targetTask.title.replace(/[/\\?%*:|"<>\s]/g, "_");
+
+            const storagePath = `homeworks/${currentUser.uid}/${cleanClassName}/${cleanStudentName}/${cleanTaskTitle}.jpg`;
+            const storageRef = storage.ref(storagePath);
+            
+            storageRef.put(file).then(snapshot => {
+                return snapshot.ref.getDownloadURL();
+            }).then(downloadURL => {
+                targetTask.photos[currentPhotoSeat] = downloadURL; 
+                syncDataToCloud(); 
+                alert("上傳成功！已歸類至該學生的雲端資料夾中。");
+            }).catch(err => {
+                alert("上傳失敗：" + err.message);
+            });
+
+            event.target.value = ''; 
+        }
+
+        function goBackToAssignmentList() { document.getElementById('checkingView').style.display = 'none'; document.getElementById('classDetailView').style.display = 'block'; currentAssignmentId = null; }
+        
+        function deleteCurrentAssignment() {
+            showConfirmModal("確定要刪除這份作業嗎？此動作無法復原。", () => {
+                const targetClass = classesData.find(c => c.id === currentClassId);
+                targetClass.assignments = targetClass.assignments.filter(t => t.id !== currentAssignmentId);
+                syncDataToCloud(); goBackToAssignmentList();
+            }, 'btn-danger', '確定刪除');
+        }
+
+        function openExportModal() {
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            const select = document.getElementById('exportStudentSelect');
+            select.innerHTML = '<option value="">-- 請選擇學生 --</option>';
+            targetClass.students.forEach(student => {
+                let option = document.createElement('option'); option.value = student.seat; option.innerText = `${student.seat}. ${student.name}`; select.appendChild(option);
+            });
+            document.getElementById('exportReportText').value = ''; document.getElementById('exportModal').style.display = 'flex';
+        }
+        function closeExportModal() { document.getElementById('exportModal').style.display = 'none'; }
+        function generateReport() {
+            const seat = document.getElementById('exportStudentSelect').value;
+            if (!seat) { document.getElementById('exportReportText').value = ''; return; }
+            const targetClass = classesData.find(c => c.id === currentClassId);
+            const student = targetClass.students.find(s => s.seat == seat);
+            let report = `--- ${student.name} 的未完成項目 ---\n\n`; let hasIncomplete = false;
+            targetClass.assignments.forEach(task => {
+                const status = task.records[seat];
+                if (status === 0) { report += `- ${task.title} (未繳交)\n`; hasIncomplete = true; } 
+                else if (status === 2) { report += `- ${task.title} (待訂正)\n`; hasIncomplete = true; }
+            });
+            if (!hasIncomplete) report += "✅ 太棒了！所有指派作業皆已完成。";
+            document.getElementById('exportReportText').value = report;
+        }
+        function copyReport() {
+            document.getElementById('exportReportText').select(); document.execCommand('copy');
+            alert("✅ 報告已成功複製到剪貼簿！"); document.getElementById('exportModal').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
